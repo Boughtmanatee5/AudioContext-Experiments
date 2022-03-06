@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Waveform</title>
+    </head>
+    <body>
+        <canvas id="oscilloscope-canvas" width="800px" height="250px"></canvas>
+        <canvas id="frequency-canvas" width="800px" height="250px"></canvas>
+        <div>
+            <audio id="audio" controls></audio>
+        </div>
+        <div>
+            <input type="file" id="file-input" />
+        </div>
+        <script>
+            (function init() {
+                const input = document.getElementById('file-input');
+
+                const oscilloscopeCanvas = document.getElementById('oscilloscope-canvas');
+                const oscilloscopeCanvasCtx = oscilloscopeCanvas.getContext('2d');
+
+                const frequencyCanvas = document.getElementById('frequency-canvas');
+                const frequencyCanvasCtx = frequencyCanvas.getContext('2d');
+
+                const audioEl = document.getElementById('audio');
+                const audioContext = new AudioContext();
+
+                const oscilloscopeAnalyser = audioContext.createAnalyser();
+                oscilloscopeAnalyser.fftSize = 1024;
+                const oscilloscopeBufferLength = oscilloscopeAnalyser.frequencyBinCount;
+                const oscilloscopeAudioData = new Uint8Array(oscilloscopeBufferLength);
+
+                const frequencyAnalyser = audioContext.createAnalyser();
+                frequencyAnalyser.fftSize = 512;
+                const frequencyBufferLength = frequencyAnalyser.frequencyBinCount;
+                const frequencyAudioData = new Uint8Array(frequencyBufferLength)
+
+
+                // draw an oscilloscope of the current audio source
+                function drawOscilloscope() {
+                    drawVisual = requestAnimationFrame(drawOscilloscope);
+                    oscilloscopeAnalyser.getByteTimeDomainData(oscilloscopeAudioData);
+
+                    WIDTH = oscilloscopeCanvas.width;
+                    HEIGHT = oscilloscopeCanvas.height;
+
+                    oscilloscopeCanvasCtx.fillStyle = 'rgb(200, 200, 200)';
+                    oscilloscopeCanvasCtx.fillRect(0, 0, WIDTH, HEIGHT);
+
+                    oscilloscopeCanvasCtx.lineWidth = 2;
+                    oscilloscopeCanvasCtx.strokeStyle = 'rgb(0, 0, 0)';
+
+                    const sliceWidth = WIDTH * 1.0 / oscilloscopeBufferLength;
+                    let x = 0;
+
+                    oscilloscopeCanvasCtx.beginPath();
+                    for(var i = 0; i < oscilloscopeBufferLength; i++) {
+                        const v = oscilloscopeAudioData[i]/128.0;
+                        const y = v * HEIGHT/2;
+
+                        if(i === 0) {
+                            oscilloscopeCanvasCtx.moveTo(x, y);
+                        } else {
+                            oscilloscopeCanvasCtx.lineTo(x, y);
+                        }
+
+                        x += sliceWidth;
+                    }
+
+                    oscilloscopeCanvasCtx.lineTo(WIDTH, HEIGHT/2);
+                    oscilloscopeCanvasCtx.stroke();
+                };
+
+                function drawFrequency() {
+                    drawVisual = requestAnimationFrame(drawFrequency);
+                    frequencyAnalyser.getByteFrequencyData(frequencyAudioData);
+
+                    WIDTH = frequencyCanvas.width;
+                    HEIGHT = frequencyCanvas.height;
+
+                    frequencyCanvasCtx.fillStyle = 'rgb(0, 0, 0)';
+                    frequencyCanvasCtx.fillRect(0, 0, WIDTH, HEIGHT);
+                    frequencyCanvasCtx.moveTo(0, HEIGHT/2);
+
+                    const barWidth = (WIDTH / frequencyBufferLength) * 2.5;
+                    let barHeight;
+                    let x = 0;
+
+                    for (let i = 0; i < frequencyAudioData.length; i++) {
+                        const barHeight = frequencyAudioData[i]/2;
+
+                        frequencyCanvasCtx.fillStyle = `rgb(${barHeight+100},50,50)`;
+                        frequencyCanvasCtx.fillRect(x, HEIGHT-barHeight/2, barWidth, barHeight)
+
+                        x += barWidth + 1;
+                    }
+                }
+
+
+
+                input.addEventListener('change', function(e) {
+                    const files = e.target.files
+                    const fileReader = new FileReader();
+
+                    fileReader.addEventListener('error', function(error) {
+                        console.error('There was an error: ', error);
+                    });
+                    fileReader.addEventListener('load', async function() {
+                        audioEl.src = fileReader.result;
+                        const audioSource = await audioContext.createMediaElementSource(audioEl)
+                        audioSource.connect(oscilloscopeAnalyser);
+                        audioSource.connect(frequencyAnalyser);
+                        audioSource.connect(audioContext.destination)
+
+                        drawOscilloscope();
+                        drawFrequency();
+                    })
+
+                    fileReader.readAsDataURL(files[0]);
+                })
+            })();
+        </script>
+    </body>
+</html>
